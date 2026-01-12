@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The City Wheel</title>
+    <style>
+        :root {
+            --active-color: #ff3333; /* The vivid Red */
+            --text-color: #ffffff;
+            --dim-opacity: 0.3;      /* Subtle fade for non-active items */
+        }
+
+        body {
+            margin: 0;
+            background-color: #000;
+            color: var(--text-color);
+            /* Clean, premium font stack */
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            overflow: hidden;
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: flex-end; /* Aligns wheel to the right */
+            padding-right: 15%; 
+            user-select: none;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* Container for Dot + Wheel */
+        .picker-container {
+            position: relative;
+            display: flex;
+            align-items: center;
+            height: 500px; /* Taller view to see more of the "wheel" */
+        }
+
+        /* THE RED DOT - Fixed in place */
+        .indicator {
+            width: 8px;
+            height: 8px;
+            background-color: var(--active-color);
+            border-radius: 50%;
+            box-shadow: 0 0 12px var(--active-color);
+            z-index: 10;
+            position: absolute;
+            left: -40px; /* Positions dot to the left of the text */
+        }
+
+        .scene {
+            width: 600px; /* Wide enough for "Auckland, New Zealand" */
+            height: 100%;
+            position: relative;
+            /* 1000px = The perfect balance of curve vs. readability */
+            perspective: 1000px; 
+            /* View from the left (-50%), looking at the center */
+            perspective-origin: -50% 50%; 
+            /* Smooth fade at top and bottom */
+            mask-image: linear-gradient(to bottom, transparent 0%, black 25%, black 75%, transparent 100%);
+            -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 25%, black 75%, transparent 100%);
+        }
+
+        .wheel {
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            transform-style: preserve-3d;
+            top: 50%;
+            left: 0;
+        }
+
+        .city-item {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 40px; /* Tighter height for a cleaner list */
+            line-height: 40px;
+            font-size: 22px; /* The "Kengo Kuma" size: legible but modest */
+            font-weight: 300; /* Light and elegant */
+            letter-spacing: 0.5px;
+            text-align: left;
+            white-space: nowrap;
+            cursor: pointer;
+            backface-visibility: hidden; /* Hides the back of the wheel */
+            opacity: var(--dim-opacity);
+            transition: opacity 0.3s ease, color 0.3s ease;
+        }
+
+        /* Active State - Pure White & Bright */
+        .city-item.active {
+            opacity: 1;
+            color: #fff;
+            font-weight: 500; /* Subtle weight increase */
+        }
+
+        /* Hover State */
+        .city-item:hover {
+            opacity: 1;
+            color: var(--active-color);
+        }
+
+    </style>
+</head>
+<body>
+
+    <div class="picker-container">
+        <div class="indicator"></div>
+        <div class="scene">
+            <div class="wheel" id="wheel"></div>
+        </div>
+    </div>
+
+    <script>
+        // --- DATA ---
+        const cities = [
+            { name: "Atlanta, Georgia", url: "/atlanta" },
+            { name: "Paris, France", url: "https://www.paris.fr" },
+            { name: "Tokyo, Japan", url: "#" },
+            { name: "Berlin, Germany", url: "#" },
+            { name: "Oslo, Norway", url: "#" },
+            { name: "Copenhagen, Denmark", url: "#" },
+            { name: "London, UK", url: "#" },
+            { name: "Madrid, Spain", url: "#" },
+            { name: "Helsinki, Finland", url: "#" },
+            { name: "Shanghai, China", url: "#" },
+            { name: "San Francisco, USA", url: "#" },
+            { name: "Sao Paulo, Brazil", url: "#" }, // Correct spelling
+            { name: "Auckland, New Zealand", url: "#" },
+            { name: "Sydney, Australia", url: "#" },
+            { name: "New York, USA", url: "#" },
+            { name: "Stockholm, Sweden", url: "#" },
+            { name: "Dubai, UAE", url: "#" },
+            { name: "Seoul, South Korea", url: "#" },
+            { name: "Rome, Italy", url: "#" },
+            { name: "Toronto, Canada", url: "#" }
+        ];
+
+        const wheel = document.getElementById('wheel');
+        
+        // GEOMETRY SETTINGS
+        // radius: 450px ensures the curve is visible but text doesn't overlap
+        const radius = 450; 
+        const totalItems = cities.length;
+        const theta = 360 / totalItems; 
+        
+        let cityElements = [];
+
+        // --- BUILDER ---
+        cities.forEach((city, index) => {
+            const el = document.createElement('div');
+            el.className = 'city-item';
+            el.innerText = city.name;
+            el.dataset.url = city.url;
+
+            const angle = theta * index;
+            // The Classic Cylinder Math
+            el.style.transform = `rotateX(-${angle}deg) translateZ(${radius}px)`;
+
+            el.onclick = () => {
+                if (!hasMoved) window.location.href = city.url; 
+            };
+
+            wheel.appendChild(el);
+            cityElements.push(el);
+        });
+
+        // --- PHYSICS & ANIMATION ---
+        let currentRotation = 0;
+        let targetRotation = 0;
+        let isDragging = false;
+        let startY = 0;
+        let startRotation = 0;
+        let hasMoved = false; 
+        
+        // A very slow, hypnotic spin
+        const autoScrollSpeed = 0.05; 
+
+        function animate() {
+            if (!isDragging) {
+                // High friction (0.05) for that "heavy wheel" feel
+                currentRotation += (targetRotation - currentRotation) * 0.05;
+                targetRotation += autoScrollSpeed; 
+            }
+            
+            // Apply rotation
+            wheel.style.transform = `translate(0, -50%) rotateX(${currentRotation}deg)`;
+
+            // --- HIGHLIGHT LOGIC ---
+            let normalizedRotation = currentRotation % 360;
+            if (normalizedRotation < 0) normalizedRotation += 360;
+            
+            const activeIndex = Math.round(normalizedRotation / theta) % totalItems;
+            
+            cityElements.forEach((el, idx) => {
+                if (idx === activeIndex) {
+                    el.classList.add('active');
+                } else {
+                    el.classList.remove('active');
+                }
+            });
+
+            requestAnimationFrame(animate);
+        }
+
+        // --- INPUT HANDLING ---
+        window.addEventListener('mousedown', (e) => {
+            isDragging = true;
+            hasMoved = false; 
+            startY = e.clientY;
+            startRotation = targetRotation;
+            document.body.style.cursor = "grabbing";
+        });
+
+        window.addEventListener('mousemove', (e) => {
+            if (!isDragging) return;
+            const deltaY = e.clientY - startY;
+            if (Math.abs(deltaY) > 5) hasMoved = true;
+            targetRotation = startRotation + (deltaY * 0.2); // Smooth drag
+            currentRotation = targetRotation; 
+        });
+
+        window.addEventListener('mouseup', () => {
+            isDragging = false;
+            document.body.style.cursor = "default";
+        });
+
+        window.addEventListener('wheel', (e) => {
+            targetRotation += e.deltaY * 0.1;
+        });
+
+        animate();
+
+    </script>
+</body>
+</html>
